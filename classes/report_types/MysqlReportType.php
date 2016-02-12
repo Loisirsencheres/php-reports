@@ -68,25 +68,37 @@ class MysqlReportType extends ReportTypeBase {
 		
 		//if the report requires read/write privileges
 		if(isset($report->options['access']) && $report->options['access']==='rw') {
-			if(isset($config['user_rw'])) $username = $config['user_rw'];
-			if(isset($config['pass_rw'])) $password = $config['pass_rw'];
-			if(isset($config['host_rw'])) $host = $config['host_rw'];
+			if (isset($config['user_rw'])) {
+				$username = $config['user_rw'];
+			}
+			if (isset($config['pass_rw'])) {
+				$password = $config['pass_rw'];
+			}
+			if (isset($config['host_rw'])) {
+				$host = $config['host_rw'];
+			}
 		}
-		
-		if(!($report->conn = mysql_connect($host, $username, $password))) {
-			throw new Exception('Could not connect to Mysql: '.mysql_error());
+
+		$report->conn = mysqli_init();
+		if(isset($config['cert']) && file_exists($config['cert'])){
+			$report->conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT,true);
+			$report->conn->ssl_set(null,null,$config['cert'],null,null);
+		}
+
+		if(!($report->conn->real_connect($host, $username, $password,null,'3306',null,isset($config['cert'])?MYSQLI_CLIENT_SSL:null))) {
+			throw new Exception('Could not connect to Mysql: '.$report->conn->error);
 		}
 		
 		if(isset($config['database'])) {
-			if(!mysql_select_db($config['database'],$report->conn)) {
-				throw new Exception('Could not select Mysql database: '.mysql_error($report->conn));
+			if(!$report->conn->select_db($config['database'])) {
+				throw new Exception('Could not select Mysql database: '.$report->conn->error);
 			}
 		}
 	}
 	
 	public static function closeConnection(&$report) {
 		if(!isset($report->conn)) return;
-		mysql_close($report->conn);
+		mysqli_close($report->conn);
 		unset($report->conn);
 	}
 	
@@ -101,17 +113,17 @@ class MysqlReportType extends ReportTypeBase {
 			$query .= ' ORDER BY '.$params['column'].' '.$params['order'];
 		}
 		
-		$result = mysql_query($query, $report->conn);
+		$result = mysqli_query($report->conn,$query);
 		
 		if(!$result) {
-			throw new Exception("Unable to get variable options: ".mysql_error());
+			throw new Exception("Unable to get variable options: ".mysqli_error($report->conn));
 		}
 		
 		$options = array();
 		
 		if(isset($params['all'])) $options[] = 'ALL';
 		
-		while($row = mysql_fetch_assoc($result)) {
+		while($row = mysqli_fetch_assoc($result)) {
 			$options[] = $row[$params['column']];
 		}
 		
@@ -124,13 +136,13 @@ class MysqlReportType extends ReportTypeBase {
 			if(is_array($value)) {
 				$first = true;
 				foreach($value as $key2=>$value2) {
-					$value[$key2] = mysql_real_escape_string(trim($value2));
+					$value[$key2] = mysqli_real_escape_string($report->conn,trim($value2));
 					$first = false;
 				}
 				$macros[$key] = $value;
 			}
 			else {
-				$macros[$key] = mysql_real_escape_string($value);
+				$macros[$key] = mysqli_real_escape_string($report->conn,$value);
 			}
 			
 			if($value === 'ALL') $macros[$key.'_all'] = true;
@@ -161,21 +173,21 @@ class MysqlReportType extends ReportTypeBase {
 			$query = trim($query);
 			if(!$query) continue;
 			
-			$result = mysql_query($query,$report->conn);
+			$result = mysqli_query($report->conn,$query);
 			if(!$result) {
-				throw new Exception("Query failed: ".mysql_error($report->conn));
+				throw new Exception("Query failed: ".mysqli_error($report->conn));
 			}
 			
 			//if this query had an assert=empty flag and returned results, throw error
 			if(preg_match('/^--[\s+]assert[\s]*=[\s]*empty[\s]*\n/',$query)) {
-				if(mysql_fetch_assoc($result))  throw new Exception("Assert failed.  Query did not return empty results.");
+				if(mysqli_fetch_assoc($result))  throw new Exception("Assert failed.  Query did not return empty results.");
 			}
 			
 			// If this query should be included as a dataset
 			if((!$explicit_datasets && $is_last) || preg_match('/--\s+@dataset(\s*=\s*|\s+)true/',$query)) {
 				$dataset = array('rows'=>array());
 				
-				while($row = mysql_fetch_assoc($result)) {
+				while($row = mysqli_fetch_assoc($result)) {
 					$dataset['rows'][] = $row;
 				}
 				

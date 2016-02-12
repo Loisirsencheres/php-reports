@@ -1,5 +1,5 @@
-Php Reports
-===========
+Php Reports - Mysqli
+====================
 
 A reporting framework for managing and displaying nice looking, exportable reports from any data source, including SQL and MongoDB.
 
@@ -124,3 +124,8 @@ Stripe::setApiKey("123456");
 Hopefully, you can begin to see the power of Php Reports.
 
 For full documentation and information on getting started, check out http://jdorn.github.io/php-reports/
+
+SSL Connection
+==============
+This fork has been updated to be able to use a secure connection with an SSL cert.
+Just put the cert at the root of the project and update the configuration accordingly
