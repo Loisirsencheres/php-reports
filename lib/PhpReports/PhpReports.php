@@ -638,24 +638,37 @@ class PhpReports {
 	 * It supports strict JSON as well as javascript syntax (i.e. unquoted/single quoted keys, single quoted values, trailing commmas)
 	 */
 	public static function json_decode($json, $assoc=false) {
-		//replace single quoted values
-		$json = preg_replace('/:\s*\'(([^\']|\\\\\')*)\'\s*([},])/e', "':'.json_encode(stripslashes('$1')).'$3'", $json);
-		
-		//replace single quoted keys
-		$json = preg_replace('/\'(([^\']|\\\\\')*)\'\s*:/e', "json_encode(stripslashes('$1')).':'", $json);
-		
-		//remove any line breaks in the code
-		$json = str_replace(array("\n","\r"),"",$json);
-		
-		//replace non-quoted keys with double quoted keys
-		$json = preg_replace('#(?<pre>\{|\[|,)\s*(?<key>(?:\w|_)+)\s*:#im', '$1"$2":', $json);
-		
-		//remove trailing comma
-		$json = preg_replace('/,\s*\}/','}',$json);
-		
-		return json_decode($json, $assoc);
+	   // Hack Kernel to get compatible with PHP 7
+           // https://github.com/jdorn/php-reports/issues/227
+
+           if (PHP_MAJOR_VERSION >= 7) {
+               //replace single quoted values
+               $json = preg_replace_callback('/:\s*\'(([^\']|\\\\\')*)\'\s*([},])/', function ($m) {
+                   return ':'.json_encode(stripslashes($m[1])).$m[3];
+               }, $json);
+               //replace single quoted keys
+               $json = preg_replace_callback('/\'(([^\']|\\\\\')*)\'\s*:/', function ($m) {
+                   return json_encode(stripslashes($m[1])).':';
+               }, $json);
+           } elseif (PHP_MAJOR_VERSION < 7) {
+              //replace single quoted values
+              $json = preg_replace('/:\s*\'(([^\']|\\\\\')*)\'\s*([},])/e', "':'.json_encode(stripslashes('$1')).'$3'", $json);
+              //replace single quoted keys
+              $json = preg_replace('/\'(([^\']|\\\\\')*)\'\s*:/e', "json_encode(stripslashes('$1')).':'", $json);
+           }
+
+           //remove any line breaks in the code
+           $json = str_replace(array("\n","\r"), "", $json);
+
+           //replace non-quoted keys with double quoted keys
+           $json = preg_replace('#(?<pre>\{|\[|,)\s*(?<key>(?:\w|_)+)\s*:#im', '$1"$2":', $json);
+
+           //remove trailing comma
+           $json = preg_replace('/,\s*\}/', '}', $json);
+
+           return json_decode($json, $assoc);
 	}
-	
+
 	protected static function urlDownload($url) {
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
